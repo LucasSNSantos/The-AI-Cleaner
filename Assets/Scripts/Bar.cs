@@ -2,10 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 public class Bar : MonoBehaviour
 {
     public Image Progress;
+    public TextMeshProUGUI Label;
 
     public float InitialWidth;
 
@@ -18,10 +20,11 @@ public class Bar : MonoBehaviour
         print(InitialWidth);
     }
 
-    public void UpdateProgress(float progress)
+    public void UpdateProgress(float progress, string label = "")
     {
         Progress.rectTransform.sizeDelta = new Vector2(InitialWidth * progress, Progress.rectTransform.rect.height);
         Progress.color = BarGradient.Evaluate(progress);
+        Label.text = label;
     }
 
 }

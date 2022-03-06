@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public enum BatteryState
@@ -10,10 +11,21 @@ public enum BatteryState
     Recharging = 0
 }
 
+public enum RoboState
+{
+    InStation,
+    OnRoute,
+    Charging
+}
+
 public class RobotCleaner : MonoBehaviour
 {
+    public int Energy;
     [Range(0, 100)]
-    public int Energy = 100;
+    public int MaxEnergy = 10;
+    public int EnergyStep = 15;
+
+    public float MoveSpeed = 0.5f;
 
     public string WallTag;
 
@@ -22,21 +34,87 @@ public class RobotCleaner : MonoBehaviour
     public bool IsUpFree;
     public bool IsDownFree;
 
+    public bool IsOn = false;
+    public bool RemoteControl = true;
+
     public BatteryState Battery;
+    public RoboState RoboState;
 
+    public Transform StationTransform;
     public Bar ProgressBar;
+    public PathSolver Solver;
+    public GameObject TileCleaned;
+    public List<GameObject> TilesCleaned { get; set; }
 
-    // Update is called once per frame
+    public List<Vector2> PathCleaned;
+    public List<Vector2> CurrentPath;
+    public List<Vector2> PathBlocked;
+
+    private void Awake()
+    {
+        Solver = new PathSolver(StationTransform.position);
+
+        PathCleaned = new List<Vector2>();
+        CurrentPath = new List<Vector2>();
+        PathBlocked = new List<Vector2>();
+        TilesCleaned = new List<GameObject>();
+
+        PathCleaned.Add(StationTransform.position);
+
+        Energy = MaxEnergy;
+    }
+
+    private void Start()
+    {
+        var walls = FindObjectsOfType(typeof(BoxCollider2D)) as BoxCollider2D[];
+
+        foreach(var wall in walls)
+        {
+            if (wall.CompareTag("Wall"))
+            {
+                PathBlocked.Add(wall.transform.position);
+            }
+        }
+    }
+
     void Update()
     {
         IdentifyPath();
 
-        WalkWithKeyboard();
+        if (RemoteControl)
+        {
+            MoveWithKeyboard();
+        }
+
+        switch(RoboState)
+        {
+            case RoboState.InStation:
+
+                if (IsOn)
+                {
+                    CalculateRoute(EnergyStep);
+
+                    RoboState = RoboState.OnRoute;
+                }
+
+                break;
+            case RoboState.OnRoute:
+
+                if (IsOn)
+                {
+
+                }
+
+                break;
+            case RoboState.Charging:
+
+                break;
+        }
 
         PrintRay();
     }
 
-    private void WalkWithKeyboard()
+    private void MoveWithKeyboard()
     {
         if (Input.GetKeyUp(KeyCode.UpArrow))
         {
@@ -56,15 +134,99 @@ public class RobotCleaner : MonoBehaviour
         }
     }
 
+    private void CalculateRoute(int howManyEnergy)
+    {
+        if (Energy > 0)
+        {
+            var currentCleanedTiles = PathCleaned.Count;
+
+            PathCleaned = Solver.GetMinorPath(PathCleaned, howManyEnergy, PathBlocked);
+
+            CurrentPath = PathCleaned.Skip(currentCleanedTiles).ToList();
+
+            StartCoroutine(MoveOnPath());
+        }
+    }
+
+    private IEnumerator MoveOnPath()
+    {
+        if (CurrentPath.Count > 0)
+        {
+            bool ignoreIfNotMyPosition = false;
+
+            foreach(var currentNode in CurrentPath)
+            {
+                if (currentNode == (Vector2)transform.position)
+                {
+                    ignoreIfNotMyPosition = true;
+                }
+
+                if (ignoreIfNotMyPosition) continue;
+
+                print(currentNode.ToString());
+
+                var tile = TilesCleaned.FirstOrDefault(x => (Vector2)x.transform.position == currentNode);
+
+                if (tile == null)
+                {
+                    var tileInstanciatade = Instantiate(TileCleaned);
+                    tileInstanciatade.transform.position = currentNode;
+                    TilesCleaned.Add(tileInstanciatade);
+                }
+
+                var canMove = Move(currentNode);
+
+                if (!canMove)
+                {
+                    // adicionar aos caminhos bloqueados
+                    // recalcular
+                }
+
+                // checar a energia q falta pra voltar pra casa
+                // se nao tiver suficiente, volte
+
+                yield return new WaitForSeconds(MoveSpeed);
+            }
+
+            if (Energy > EnergyStep)
+            {
+                CalculateRoute(EnergyStep);
+            }
+            else
+            {
+                print("ACABOU ENERGIA IRMAO!");
+            }
+        }
+    }
+
+    public bool Move(Vector2 direction)
+    {
+        var normalized = direction.normalized;
+
+        if ((normalized.y == 1 && !IsUpFree) || (normalized.y == -1 && !IsDownFree))
+        {
+            return false;
+        }
+
+        if ((normalized.x == 1 && !IsRightFree) || (normalized.x == -1 && !IsLeftFree))
+        {
+            return false;
+        }
+
+        Move(direction, true);
+
+        return true;
+    }
+
     private void Move(Vector2 walkStep, bool isFree)
     {
         if (!isFree) return;
 
-        transform.Translate(walkStep);
+        transform.position = walkStep;
 
         HandleEnergy();
 
-        ProgressBar.UpdateProgress(Energy / 100f);
+        ProgressBar.UpdateProgress((float)Energy / MaxEnergy, Battery.ToString());
     }
 
     private void HandleEnergy()
