@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,6 +26,7 @@ public class RobotCleaner : MonoBehaviour
     public int MaxEnergy = 10;
     public int EnergyStep = 15;
 
+    public float Timestamp = 0;
     public float MoveSpeed = 0.5f;
 
     public string WallTag;
@@ -44,6 +46,8 @@ public class RobotCleaner : MonoBehaviour
     public Bar ProgressBar;
     public PathSolver Solver;
     public GameObject TileCleaned;
+    public AreaUI AreaUI;
+    public AreaUI TempoUI;
     public List<GameObject> TilesCleaned { get; set; }
 
     public List<Vector2> PathCleaned;
@@ -174,6 +178,8 @@ public class RobotCleaner : MonoBehaviour
                     TilesCleaned.Add(tileInstanciatade);
                 }
 
+                AreaUI.UpdateArea(TilesCleaned.Count.ToString());
+
                 var canMove = Move(currentNode);
 
                 if (!canMove)
@@ -184,6 +190,12 @@ public class RobotCleaner : MonoBehaviour
 
                 // checar a energia q falta pra voltar pra casa
                 // se nao tiver suficiente, volte
+
+                Timestamp += MoveSpeed;
+
+                TimeSpan span = new TimeSpan(0, 0, (int)Timestamp);
+
+                TempoUI.UpdateArea($"{span.Minutes.ToString("00")}:{span.Seconds.ToString("00")}");
 
                 yield return new WaitForSeconds(MoveSpeed);
             }
