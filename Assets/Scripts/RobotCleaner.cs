@@ -118,6 +118,17 @@ public class RobotCleaner : MonoBehaviour
         PrintRay();
     }
 
+    private List<Vector2> GetAdjacentNodes(Vector2 node)
+    {
+        return new List<Vector2>
+        {
+            new Vector2(node.x,node.y + 1),
+            new Vector2(node.x,node.y - 1),
+            new Vector2(node.x + 1,node.y),
+            new Vector2(node.x - 1,node.y)
+        };
+    }
+
     private void MoveWithKeyboard()
     {
         if (Input.GetKeyUp(KeyCode.UpArrow))
