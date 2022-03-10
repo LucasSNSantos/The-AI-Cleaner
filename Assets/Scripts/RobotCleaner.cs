@@ -53,6 +53,7 @@ public class RobotCleaner : MonoBehaviour
     public List<Vector2> PathCleaned;
     public List<Vector2> CurrentPath;
     public List<Vector2> PathBlocked;
+    public List<Vector2> Learn;
 
     private void Awake()
     {
@@ -72,7 +73,7 @@ public class RobotCleaner : MonoBehaviour
     {
         var walls = FindObjectsOfType(typeof(BoxCollider2D)) as BoxCollider2D[];
 
-        foreach(var wall in walls)
+        foreach (var wall in walls)
         {
             if (wall.CompareTag("Wall"))
             {
@@ -85,19 +86,18 @@ public class RobotCleaner : MonoBehaviour
     {
         IdentifyPath();
 
-        if (RemoteControl)
-        {
-            MoveWithKeyboard();
-        }
+        //if (RemoteControl)
+        //{
+        //    MoveWithKeyboard();
+        //}
 
-        switch(RoboState)
+        switch (RoboState)
         {
             case RoboState.InStation:
 
                 if (IsOn)
                 {
-                    CalculateRoute(EnergyStep);
-
+                    StartCoroutine(ualqui());
                     RoboState = RoboState.OnRoute;
                 }
 
@@ -118,7 +118,7 @@ public class RobotCleaner : MonoBehaviour
         PrintRay();
     }
 
-    private List<Vector2> GetAdjacentNodes(Vector2 node)
+    private List<Vector2> GetAdjacentNodes(Vector2 node, Func<Vector2, bool> filter = null)
     {
         return new List<Vector2>
         {
@@ -126,7 +126,7 @@ public class RobotCleaner : MonoBehaviour
             new Vector2(node.x,node.y - 1),
             new Vector2(node.x + 1,node.y),
             new Vector2(node.x - 1,node.y)
-        };
+        }.Where((filter ?? ((x) => true))).ToList();
     }
 
     private void MoveWithKeyboard()
@@ -149,77 +149,193 @@ public class RobotCleaner : MonoBehaviour
         }
     }
 
-    private void CalculateRoute(int howManyEnergy)
+
+
+    private bool equalVectors(Vector2 v1, Vector2 v2)
     {
-        if (Energy > 0)
-        {
-            var currentCleanedTiles = PathCleaned.Count;
-
-            PathCleaned = Solver.GetMinorPath(PathCleaned, howManyEnergy, PathBlocked);
-
-            CurrentPath = PathCleaned.Skip(currentCleanedTiles).ToList();
-
-            StartCoroutine(MoveOnPath());
-        }
+        return (v1.x == v2.x) && (v1.y == v2.y);
+    }
+    private string stringfyVector(Vector2 vector)
+    {
+        return "{" + "x: " + vector.x + " y: " + vector.y ;
     }
 
-    private IEnumerator MoveOnPath()
+    private int CalcHeuristicCost(Vector2 origin, Vector2 goal)
     {
-        if (CurrentPath.Count > 0)
+        return (int)((Math.Abs(origin.x - goal.x) + Math.Abs(origin.y - origin.y)));
+    }
+
+    private List<Vector2> buildPath(Dictionary<Vector2, Vector2> cameFrom, Vector2 current)
+    {
+        var path = new List<Vector2>() { current };
+        current = cameFrom[current];
+
+        while(cameFrom.ContainsKey(current))
         {
-            bool ignoreIfNotMyPosition = false;
+            current = cameFrom[current];
 
-            foreach(var currentNode in CurrentPath)
+            path.Add(current);
+        }
+
+        var paz = path.LastOrDefault();
+
+        path.Remove(paz);
+        
+        path.Reverse();
+
+        return path;
+    }
+
+    private List<Vector2> AStar(Vector2 start, Vector2 goal, Predicate<Vector2> restriction)
+    {
+        var openSet = new List<Vector2>() { start };
+        var cameFrom = new Dictionary<Vector2, Vector2>();
+
+        var startCost = new Dictionary<Vector2, int>();
+        startCost.Add(start, 0);
+        
+        var fullCost = new Dictionary<Vector2, int>();
+        fullCost.Add(start, CalcHeuristicCost(start, goal));
+
+        var count = 0;
+        while(openSet.Count > 0)
+        {
+            if (count++ > 500) throw new Exception();
+
+            Vector2 current = start;
+
+            foreach(var node in openSet)
             {
-                if (currentNode == (Vector2)transform.position)
+                if (fullCost[node] == default)
                 {
-                    ignoreIfNotMyPosition = true;
+                    continue;
                 }
 
-                if (ignoreIfNotMyPosition) continue;
-
-                print(currentNode.ToString());
-
-                var tile = TilesCleaned.FirstOrDefault(x => (Vector2)x.transform.position == currentNode);
-
-                if (tile == null)
+                if (fullCost[current] == default)
                 {
-                    var tileInstanciatade = Instantiate(TileCleaned);
-                    tileInstanciatade.transform.position = currentNode;
-                    TilesCleaned.Add(tileInstanciatade);
+                    current = node;
+                    continue;
                 }
 
-                AreaUI.UpdateArea(TilesCleaned.Count.ToString());
-
-                var canMove = Move(currentNode);
-
-                if (!canMove)
+                var res = fullCost[node] < fullCost[current];
+                if (res)
                 {
-                    // adicionar aos caminhos bloqueados
-                    // recalcular
+                    current = node;
                 }
-
-                // checar a energia q falta pra voltar pra casa
-                // se nao tiver suficiente, volte
-
-                Timestamp += MoveSpeed;
-
-                TimeSpan span = new TimeSpan(0, 0, (int)Timestamp);
-
-                TempoUI.UpdateArea($"{span.Minutes.ToString("00")}:{span.Seconds.ToString("00")}");
-
-                yield return new WaitForSeconds(MoveSpeed);
             }
 
-            if (Energy > EnergyStep)
+            if (current == goal) return buildPath(cameFrom, current);
+
+            openSet.Remove(current);
+
+            var adjs = GetAdjacentNodes(current);
+
+            foreach (var neighbor in adjs)
             {
-                CalculateRoute(EnergyStep);
+                var restrc = restriction(neighbor);
+                if (restriction != null && !restriction(neighbor))
+                {
+                    continue;
+                }
+
+                var neighborStartCost = startCost[current] + 1;
+
+                var restartHasKey = startCost.ContainsKey(neighbor);
+
+                var cost = int.MaxValue;
+
+                if (restartHasKey)
+                {
+                    cost = startCost[neighbor];
+                }
+
+                if (cost == int.MaxValue || neighborStartCost < cost)
+                {
+                    cameFrom.Add(neighbor, current);
+                    startCost.Add(neighbor, neighborStartCost);
+                    fullCost.Add(neighbor, neighborStartCost + CalcHeuristicCost(neighbor, goal));
+
+                    if (!openSet.Any(x => x == neighbor))
+                    {
+                        openSet.Add(neighbor);
+                    }
+                }
+            }
+        }
+
+        throw new Exception("no impossivel de ser alcancado");
+
+
+    }
+
+    private IEnumerator ualqui()
+    {
+        Vector2 current = StationTransform.position;
+        List<Vector2> nexts = new List<Vector2>();
+        List<Vector2> visited = new List<Vector2>();
+
+        while (Energy > 0)
+        {
+            List<Vector2> adjs = GetAdjacentNodes(current, (node) => !visited.Contains(node) && !Learn.Contains(node));
+            foreach (var i in adjs)
+            {
+                if (!nexts.Contains(i)) nexts.Add(i);
+            }
+            List<Vector2> bestPathForward = null;
+            foreach (var node in nexts)
+            {
+                List<Vector2> pathForward = AStar(current, node, (x) => !Learn.Contains(x));
+                if (bestPathForward == null || pathForward.Count < bestPathForward.Count)
+                {
+                    bestPathForward = pathForward;
+                }
+                if (bestPathForward.Count == 1)
+                {
+                    break;
+                }
+            }
+
+            Vector2 goal = bestPathForward.LastOrDefault();
+            List<Vector2> bestPathReturning = AStar(goal, StationTransform.position, (x) => visited.Contains(x));
+            if (Energy > bestPathForward.Count + bestPathReturning.Count)
+            {
+                bool success = true;
+                foreach (var i in bestPathForward)
+                {
+                    success = Move(i);
+                    yield return new WaitForSeconds(0.5f);
+                    nexts = nexts.Where(x => x == i).ToList();
+                    if (success)
+                    {
+                        visited.Add(i);
+                        adjs = GetAdjacentNodes(i, (x) => !visited.Contains(x) && !Learn.Contains(x));
+                        foreach (var j in adjs)
+                        {
+                            if (!nexts.Contains(j)) nexts.Add(j);
+                        }
+                        current = i;
+                    }
+                    else
+                    {
+                        Learn.Add(i);
+                        break;
+                    }
+                }
+
+                if (!success) continue;
+
             }
             else
             {
-                print("ACABOU ENERGIA IRMAO!");
+                foreach (var i in bestPathReturning)
+                {
+                    Move(i);
+                    yield return new WaitForSeconds(0.5f);
+                }
+                break;
             }
         }
+
     }
 
     public bool Move(Vector2 direction)
@@ -259,10 +375,12 @@ public class RobotCleaner : MonoBehaviour
         if (Energy >= (int)BatteryState.Full)
         {
             Battery = BatteryState.Full;
-        } else if(Energy > (int) BatteryState.Mid && Energy < (int) BatteryState.Full)
+        }
+        else if (Energy > (int)BatteryState.Mid && Energy < (int)BatteryState.Full)
         {
             Battery = BatteryState.Mid;
-        } else
+        }
+        else
         {
             Battery = BatteryState.Low;
         }

@@ -3348,6 +3348,7 @@ MonoBehaviour:
   PathCleaned: []
   CurrentPath: []
   PathBlocked: []
+  Learn: []
 --- !u!1 &519420028
 GameObject:
   m_ObjectHideFlags: 0
@@ -11212,7 +11213,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -52.250122, y: 255.6}
+  m_AnchoredPosition: {x: -145, y: -167}
   m_SizeDelta: {x: 105.5, y: 58.7214}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1636896318
@@ -12066,7 +12067,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -171.25012, y: 255.6}
+  m_AnchoredPosition: {x: -264, y: -167}
   m_SizeDelta: {x: 105.5, y: 58.7214}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1849684293
